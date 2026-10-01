@@ -1,5 +1,9 @@
 # XIVPlayer
 
+## 0.4.1
+
+- No changes in the game. From this version, releases are published automatically to CurseForge and GitHub.
+
 ## 0.4.0
 
 ### Cast bar
