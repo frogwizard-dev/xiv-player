@@ -30,7 +30,9 @@ ns.defaults = {
     -- Above the gauges: buffs over HP (a whitelist, empty until you add some), debuffs over MP
     -- (all of them except a blacklist).
     buffs = { enabled = true, list = {}, size = 24, spacing = 2, offsetY = 4, showTimer = true },
-    debuffs = { enabled = true, blacklist = {}, max = 16, size = 24, spacing = 2, offsetY = 4, showTimer = true },
+    -- maxMinutes: hide debuffs lasting longer than this (0 = off); see Auras.lua for why.
+    debuffs = { enabled = true, blacklist = {}, max = 16, size = 24, spacing = 2, offsetY = 4, showTimer = true,
+        maxMinutes = 0 },
     -- Your cast bar, centred above the player bar (x/y from the bar's top edge).
     -- Latency: the end of the cast already safe to cast through, shaded. Icon: left of the bar.
     cast = { enabled = true, hideBlizzard = true, width = 260, height = 6, x = 0, y = 70, showTime = true,

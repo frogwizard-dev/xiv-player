@@ -1,8 +1,20 @@
 # XIVPlayer
 
+## 0.4.2
+
+### Debuffs
+- New **Hide if over** setting (Debuffs tab): hides debuffs lasting longer than the minutes you choose, e.g. 30 to hide Boosted Rest's hour. Combat debuffs and short lockouts still show.
+- The game only lets addons hide a few of your own debuffs by name, so the "Debuffs to hide" list often can't hide one (like Boosted Rest). The Debuffs tab now says so and points to Hide if over.
+
 ## 0.4.1
 
 - No changes in the game. From this version, releases are published automatically to CurseForge and GitHub.
+
+## 0.4.2
+
+### Debuffs
+- New **Hide if over** setting (Debuffs tab): hides debuffs lasting longer than the minutes you choose, e.g. 30 to hide Boosted Rest's hour. Combat debuffs and short lockouts still show.
+- The game only lets addons hide a few of your own debuffs by name, so the "Debuffs to hide" list often can't hide one (like Boosted Rest). The Debuffs tab now says so and points to Hide if over.
 
 ## 0.4.0
 

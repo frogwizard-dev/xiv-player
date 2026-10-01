@@ -109,7 +109,7 @@ end
 local function Signature(kind)
     local cfg = ns.db[kind]
     if kind == "buffs" then return "w|" .. table.concat(cfg.list, ",") end
-    return "b|" .. cfg.max .. "|" .. table.concat(cfg.blacklist, ",")
+    return "b|" .. cfg.max .. "|" .. (cfg.maxMinutes or 0) .. "|" .. table.concat(cfg.blacklist, ",")
 end
 
 local function Build(kind)
@@ -147,9 +147,17 @@ local function Build(kind)
             add("w" .. i, "HELPFUL", { maxFrameCount = 1, candidateFilters = { includeSpellIDs = { [id] = true } } })
         end
     else
+        -- The engine ignores spell-ID filters for debuffs on a unit you can assist, yourself
+        -- included, except for the few spells it never hides from addons (EllesmereUI calls it
+        -- the identity gate). So the blacklist only catches those; duration does work on you,
+        -- so long debuffs (Boosted Rest's hour, say) are hidden by a duration cap instead.
+        -- maxDuration also drops debuffs with no duration at all.
+        local filters = {}
         local exclude = {}
         for _, id in ipairs(cfg.blacklist) do exclude[id] = true end
-        add("all", "HARMFUL", { maxFrameCount = cfg.max, candidateFilters = next(exclude) and { excludeSpellIDs = exclude } or nil })
+        if next(exclude) then filters.excludeSpellIDs = exclude end
+        if (cfg.maxMinutes or 0) > 0 then filters.maxDuration = cfg.maxMinutes * 60 end
+        add("all", "HARMFUL", { maxFrameCount = cfg.max, candidateFilters = next(filters) and filters or nil })
     end
     groupKeys[kind] = keys
     -- Unit last: the engine only listens for aura events once the container has groups.
@@ -292,13 +300,21 @@ function Auras.BuildPage(p, kind)
     place(UI.Stepper(p, "Icon size", 14, 48, 2, function() return cfg.size end, function(v) cfg.size = v end), 26)
     if not whitelist then
         place(UI.Stepper(p, "Most shown", 1, 40, 1, function() return cfg.max end, function(v) cfg.max = v end), 26)
+        place(UI.Stepper(p, "Hide if over (mins)", 0, 120, 5, function() return cfg.maxMinutes or 0 end,
+            function(v) cfg.maxMinutes = v end), 26)
     end
     place(UI.Stepper(p, "Spacing", 0, 12, 1, function() return cfg.spacing end, function(v) cfg.spacing = v end), 26)
     place(UI.Stepper(p, "Raise above the gauge", -20, 80, 2, function() return cfg.offsetY end,
         function(v) cfg.offsetY = v end), 30)
 
     place(UI.Label(p, whitelist and "Buffs to show (in this order)" or "Debuffs to hide"), 18)
-    place(UI.Help(p, "Hover any buff or spell to see its Spell ID, or pick from what's on you now.", 400), 20)
+    if whitelist then
+        place(UI.Help(p, "Hover any buff or spell to see its Spell ID, or pick from what's on you now.", 400), 20)
+    else
+        -- The game skips spell-ID lists for debuffs on you (see Build), so say so plainly.
+        place(UI.Help(p, "The game only lets addons hide a few debuffs on you by name. For long ones "
+            .. "like Boosted Rest (an hour), set \"Hide if over\" above, e.g. to 30. 0 turns it off.", 400), 30)
+    end
 
     local function AddID(id)
         id = tonumber(id)
