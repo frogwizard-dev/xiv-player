@@ -2,6 +2,7 @@
 ## Title: XIVPlayer
 ## Notes: An FFXIV-style player bar: thin HP and power gauges with the label and a large number underneath.
 ## Version: 0.4.0
+## X-Curse-Project-ID: 1719646
 ## OptionalDeps: EllesmereUI
 ## SavedVariables: XIVPlayerDB
 ## IconTexture: Interface\Icons\Spell_Holy_SealOfVengeance
