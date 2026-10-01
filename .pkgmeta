@@ -1,0 +1,8 @@
+package-as: XIVPlayer
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - Images

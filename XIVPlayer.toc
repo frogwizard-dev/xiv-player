@@ -1,0 +1,16 @@
+## Interface: 16001, 120000, 120001, 120005, 120007, 120100
+## Title: XIVPlayer
+## Notes: An FFXIV-style player bar: thin HP and power gauges with the label and a large number underneath.
+## Version: 0.4.0
+## OptionalDeps: EllesmereUI
+## SavedVariables: XIVPlayerDB
+## IconTexture: Interface\Icons\Spell_Holy_SealOfVengeance
+## AddonCompartmentFunc: XIVPlayer_OnCompartmentClick
+
+Options.lua
+Media.lua
+Gauge.lua
+ConfigKit.lua
+Auras.lua
+Cast.lua
+Player.lua
