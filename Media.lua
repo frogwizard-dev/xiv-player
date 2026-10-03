@@ -88,17 +88,28 @@ local function Redraw(fs)
     end)
 end
 
+-- A font from an add-on that isn't loaded (EllesmereUI's, after it's turned off or removed):
+-- asking for it raises an error rather than just failing, so it isn't asked for at all.
+local function FromMissingAddOn(path)
+    local addon = path:match("^[Ii]nterface[\\/][Aa]dd[Oo]ns[\\/]([^\\/]+)")
+    local isLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
+    return addon ~= nil and isLoaded ~= nil and not isLoaded(addon)
+end
+
 -- A font file WoW hasn't finished loading can be refused on the first try (seen right after a
 -- restart), so a refused font is retried a few times; the fallback only shows until it takes.
 function Media:SetFont(fs, path, size, outline)
     if not fs then return end
     local wanted = path .. "|" .. size .. "|" .. (outline or "")
     fs.mediaFont = wanted
-    if not fs:SetFont(path, size, outline) then
+    local usable = not FromMissingAddOn(path)
+    local ok, set = false, false
+    if usable then ok, set = pcall(fs.SetFont, fs, path, size, outline) end
+    if not (ok and set) then
         if not fs:SetFont(CUSTOM_FONT, size, outline) then
             fs:SetFont(STANDARD_TEXT_FONT, size, outline)
         end
-        for _, delay in ipairs({ 0.2, 1, 3 }) do
+        for _, delay in ipairs(usable and { 0.2, 1, 3 } or {}) do
             C_Timer.After(delay, function()
                 -- By now the text may be forbidden (aura text in restricted content); skip it.
                 if fs.mediaFont ~= wanted or (fs.IsForbidden and fs:IsForbidden()) then return end

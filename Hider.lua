@@ -8,6 +8,9 @@ local _, ns = ...
 -- while the frame is hidden, keeping their place and size, and go back when it's shown.
 -- Unit frames are protected, so nothing moves in combat or Edit Mode (where re-parenting runs
 -- Blizzard's layout code under our taint); changes made then wait.
+-- Every add-on with this file shares one hidden frame (FrogwizardHiddenParent): each watches
+-- for the frame it hid being moved out from under it, so with a hidden frame of its own each,
+-- two add-ons hiding the same frame would keep taking it from each other.
 
 local hiddenParent
 local frames = {}
@@ -61,7 +64,7 @@ function ns.HideBlizzardFrame(name, on, keep)
     if not s then
         if not on then return end
         if not hiddenParent then
-            hiddenParent = CreateFrame("Frame")
+            hiddenParent = _G.FrogwizardHiddenParent or CreateFrame("Frame", "FrogwizardHiddenParent")
             hiddenParent:Hide()
         end
         s = { frame = frame, keep = keep or {}, kept = {} }

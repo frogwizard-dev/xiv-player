@@ -1,5 +1,11 @@
 # XIVPlayer
 
+## 0.5.1
+
+### Fixes
+- Fixed a "file not found" font error after EllesmereUI is turned off or removed while its font (Expressway) is chosen. The game's standard font is used until you pick another.
+- Hiding Blizzard's player frame now works alongside other add-ons that hide it the same way, instead of the two undoing each other.
+
 ## 0.5.0
 
 ### Mana in forms

@@ -1,7 +1,7 @@
 ## Interface: 16001, 120000, 120001, 120005, 120007, 120100
 ## Title: XIVPlayer
 ## Notes: An FFXIV-style player bar: thin HP and power gauges with the label and a large number underneath.
-## Version: 0.5.0
+## Version: 0.5.1
 ## X-Curse-Project-ID: 1719646
 ## OptionalDeps: EllesmereUI
 ## SavedVariables: XIVPlayerDB
