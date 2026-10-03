@@ -1,8 +1,9 @@
 package-as: XIVPlayer
 
 manual-changelog:
-  filename: CHANGELOG.md
+  filename: RELEASE_NOTES.md
   markup-type: markdown
 
 ignore:
   - Images
+  - RELEASE_NOTES.md

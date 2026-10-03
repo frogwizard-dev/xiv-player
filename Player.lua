@@ -24,9 +24,13 @@ ns.defaults = {
     fade = false,     -- dim out of combat
     fadeAlpha = 0.4,
     clicks = true,    -- left-click the bar to target yourself, right-click for your menu
+    hidePlayerFrame = false, -- hide Blizzard's player frame (its pet and totem frames stay)
     absorb = true,    -- shields drawn on the HP gauge as a striped fill
     absorbText = true, -- and "+X" after the HP number, in the shield colour
     absorbColor = { r = 1, g = 1, b = 1 },
+    -- While your gauge shows another resource (a druid's bear or cat form, Shadow, Elemental),
+    -- a third gauge to its right shows your mana.
+    shiftMana = true,
     -- Above the gauges: buffs over HP (a whitelist, empty until you add some), debuffs over MP
     -- (all of them except a blacklist).
     buffs = { enabled = true, list = {}, size = 24, spacing = 2, offsetY = 4, showTimer = true },
@@ -47,6 +51,21 @@ local POWER = {
     FOCUS = { "FP", { 0.95, 0.62, 0.32 } },
     RUNIC_POWER = { "RP", { 0.35, 0.80, 0.95 } },
 }
+
+local MANA = Enum.PowerType and Enum.PowerType.Mana or 0
+-- Classes whose gauge can show something other than the mana they still have underneath.
+local SHIFT_MANA_CLASSES = { DRUID = true, PRIEST = true, SHAMAN = true }
+
+local function PowerColor(token, db)
+    local info = POWER[token]
+    local r, g, b = 0.7, 0.7, 0.7
+    if info then r, g, b = unpack(info[2]) end
+    if db.colorMode == "wow" then
+        local c = PowerBarColor[token]
+        if c then r, g, b = c.r, c.g, c.b end
+    end
+    return r, g, b
+end
 
 local function CopyDefaults(src, dst)
     for k, v in pairs(src) do
@@ -96,6 +115,13 @@ local function Tint(b, r, g, bl)
     b.number:SetTextColor(1, 1, 1)
 end
 
+-- The label and number belong to the bar's frame, not the gauge, so each is shown on its own.
+local function ShowBlock(b, shown)
+    b.gauge.bar:SetShown(shown)
+    b.label:SetShown(shown)
+    b.number:SetShown(shown)
+end
+
 ------------------------------------------------------------------------------
 -- The bar
 ------------------------------------------------------------------------------
@@ -122,6 +148,8 @@ function Player:Init()
 
     self.health = Block(f, "HP")
     self.power = Block(f, "MP")
+    self.mana = Block(f, "MP")
+    ShowBlock(self.mana, false)
     self.health.gauge.bar:SetPoint("TOPLEFT")
     self.health.gauge:EnableAbsorb()
     local shield = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -165,11 +193,17 @@ function Player:Apply()
 
     StyleBlock(self.health, db)
     StyleBlock(self.power, db)
+    StyleBlock(self.mana, db)
     ns.Media:SetFont(self.health.shield, db.font, math.max(db.labelSize + 2, math.floor(db.numberSize * 0.6)), db.outline)
     self.power.gauge.bar:ClearAllPoints()
     self.power.gauge.bar:SetPoint("LEFT", self.health.gauge.bar, "RIGHT", db.spacing, 0)
+    -- Outside the frame's bounds on purpose: growing the frame when you shift would move the
+    -- HP and power gauges too, and the click button can't be resized in combat.
+    self.mana.gauge.bar:ClearAllPoints()
+    self.mana.gauge.bar:SetPoint("LEFT", self.power.gauge.bar, "RIGHT", db.spacing, 0)
 
     self:SetupClicks()
+    ns.HideBlizzardFrame("PlayerFrame", db.hidePlayerFrame, { "PetFrame", "TotemFrame" })
     ns.Auras:Apply()
     ns.Cast:Apply()
     self:UpdateHealth(true)
@@ -263,16 +297,32 @@ function Player:UpdatePower(instant)
     local pType, token = UnitPowerType("player")
     local value, max = UnitPower("player", pType), UnitPowerMax("player", pType)
     local pct = UnitPowerPercent and CurveConstants and UnitPowerPercent("player", pType, true, CurveConstants.ScaleTo100)
-    local info = POWER[token] or { token and token:sub(1, 2) or "PW", { 0.7, 0.7, 0.7 } }
-    self.power.label:SetText(info[1])
-    local r, g, b = unpack(info[2])
-    if db.colorMode == "wow" then
-        local c = PowerBarColor[token]
-        if c then r, g, b = c.r, c.g, c.b end
-    end
+    local info = POWER[token]
+    self.power.label:SetText(info and info[1] or (token and token:sub(1, 2)) or "PW")
     self.power.gauge:SetValues(value, max, instant)
-    Tint(self.power, r, g, b)
+    Tint(self.power, PowerColor(token, db))
     UI.SetTemplateText(self.power.number, db.powerText, { value = value, max = max, percent = Percent(pct, value, max) })
+    self:UpdateMana(pType, instant)
+end
+
+-- Your mana while the main gauge shows something else (bear or cat form, Shadow, Elemental).
+function Player:UpdateMana(pType, instant)
+    local db = ns.db
+    local value, max = UnitPower("player", MANA), UnitPowerMax("player", MANA)
+    local _, class = UnitClass("player")
+    -- A secret max can't be compared; only these classes get here, and they all have mana.
+    local shown = db.shiftMana and pType ~= MANA and SHIFT_MANA_CLASSES[class]
+        and (issecret(max) or max > 0) or false
+    if shown ~= self.manaShown then
+        self.manaShown = shown
+        ShowBlock(self.mana, shown)
+        instant = true -- no sliding up from empty when it appears
+    end
+    if not shown then return end
+    local pct = UnitPowerPercent and CurveConstants and UnitPowerPercent("player", MANA, true, CurveConstants.ScaleTo100)
+    self.mana.gauge:SetValues(value, max, instant)
+    Tint(self.mana, PowerColor("MANA", db))
+    UI.SetTemplateText(self.mana.number, db.powerText, { value = value, max = max, percent = Percent(pct, value, max) })
 end
 
 -- inCombat comes from the combat events: while PLAYER_REGEN_DISABLED is being handled,
@@ -297,7 +347,9 @@ local function BuildLayout(p)
     place(UI.Checkbox(p, "Unlock to move (drag the bar)",
         function() return not db.locked end, function(v) db.locked = not v end), 28)
     place(UI.Checkbox(p, "Click to target yourself, right-click for your menu",
-        function() return db.clicks end, function(v) db.clicks = v end), 34)
+        function() return db.clicks end, function(v) db.clicks = v end), 28)
+    place(UI.Checkbox(p, "Hide Blizzard's player frame",
+        function() return db.hidePlayerFrame end, function(v) db.hidePlayerFrame = v end), 34)
     place(UI.Stepper(p, "Scale", 0.5, 2, 0.05, function() return db.scale end, function(v) db.scale = v end, "%.2f"), 26)
     place(UI.Stepper(p, "Gauge width", 80, 500, 10, function() return db.width end, function(v) db.width = v end), 26)
     place(UI.Stepper(p, "Gauge height", 2, 20, 1, function() return db.height end, function(v) db.height = v end), 26)
@@ -308,6 +360,8 @@ local function BuildLayout(p)
         function() return db.texture end, function(v) db.texture = v end), 30)
     place(UI.Dropdown(p, "Power colours", COLOR_MODES, function() return db.colorMode end,
         function(v) db.colorMode = v end), 30)
+    place(UI.Checkbox(p, "Show my mana in forms (bear, cat, Shadow, Elemental)",
+        function() return db.shiftMana end, function(v) db.shiftMana = v end), 30)
     place(UI.ColorSwatch(p, "HP colour", function() return db.healthColor end,
         function(r, g, b) db.healthColor = { r = r, g = g, b = b } end), 30)
     place(UI.Checkbox(p, "Show shields (absorbs) on the HP gauge",
