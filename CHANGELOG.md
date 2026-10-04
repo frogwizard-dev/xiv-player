@@ -1,5 +1,10 @@
 # XIVPlayer
 
+## 0.5.3
+
+### Under the hood
+- Shares its options page and its texture and font lists with the other Frog Wizard add-ons (one copy of the code, so a fix reaches them all at once). Nothing changes in how it looks or works.
+
 ## 0.5.2
 
 ### Options

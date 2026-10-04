@@ -2,14 +2,14 @@
 ## Title: XIVPlayer
 ## Category: Frog Wizard
 ## Notes: An FFXIV-style player bar: thin HP and power gauges with the label and a large number underneath.
-## Version: 0.5.2
+## Version: 0.5.3
 ## X-Curse-Project-ID: 1719646
 ## OptionalDeps: EllesmereUI
 ## SavedVariables: XIVPlayerDB
 ## IconTexture: Interface\Icons\Spell_Holy_SealOfVengeance
 ## AddonCompartmentFunc: XIVPlayer_OnCompartmentClick
 
-Options.lua
+Libs\FrogLib\FrogLib.xml
 Media.lua
 Gauge.lua
 ConfigKit.lua
