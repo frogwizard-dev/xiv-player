@@ -84,23 +84,14 @@ local function PowerColor(token, db)
     return r, g, b
 end
 
-local function CopyDefaults(src, dst)
-    for k, v in pairs(src) do
-        if type(v) == "table" then
-            if type(dst[k]) ~= "table" then dst[k] = {} end
-            CopyDefaults(v, dst[k])
-        elseif dst[k] == nil then
-            dst[k] = v
-        end
-    end
-end
+local CopyDefaults = FrogLib.Util.CopyDefaults
 
 ------------------------------------------------------------------------------
 -- Gauge blocks: gauge on top, small label and large number underneath (FFXIV's layout)
 ------------------------------------------------------------------------------
 
 local function Block(parent, label)
-    local b = { gauge = ns.CreateGauge(parent) }
+    local b = { gauge = FrogLib.Gauge.New(parent) }
     b.label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     b.label:SetText(label)
     b.label:SetShadowOffset(1, -1)
@@ -149,17 +140,8 @@ function Player:Init()
     local f = CreateFrame("Frame", "XIVPlayerFrame", UIParent)
     f:SetClampedToScreen(true)
     f:SetMovable(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", function(frame)
-        frame:StopMovingOrSizing()
-        local p, _, rp, x, y = frame:GetPoint()
-        ns.db.point = { p, "UIParent", rp, x, y }
-    end)
-    f.unlockTint = f:CreateTexture(nil, "BACKGROUND")
-    f.unlockTint:SetPoint("TOPLEFT", -6, 6)
-    f.unlockTint:SetPoint("BOTTOMRIGHT", 6, -6)
-    f.unlockTint:SetColorTexture(0.3, 0.6, 1, 0.2)
+    -- Dragged while unlocked; the tint marks it (FrogLib's Mover.lua).
+    FrogLib.Mover.Make(f, { save = function(point) ns.db.point = point end, tint = 6 })
     self.frame = f
 
     self.health = Block(f, "HP")

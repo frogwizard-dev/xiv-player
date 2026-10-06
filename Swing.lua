@@ -140,7 +140,7 @@ function Swing:Init()
     for _, hand in ipairs(HANDS) do
         local row = CreateFrame("Frame", nil, f)
         row.hand = hand
-        local g = ns.CreateGauge(row)
+        local g = FrogLib.Gauge.New(row)
         row.gauge = g
         row.name = Text(row)
         row.name:SetJustifyH("LEFT")

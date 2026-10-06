@@ -53,7 +53,7 @@ function Cast:Init()
     local f = CreateFrame("Frame", "XIVPlayerCastBar", UIParent)
     f:SetSize(1, 1)
     self.frame = f
-    local g = ns.CreateGauge(f)
+    local g = FrogLib.Gauge.New(f)
     g.bar:SetPoint("BOTTOMLEFT")
     g.bar:SetPoint("BOTTOMRIGHT")
     self.gauge = g

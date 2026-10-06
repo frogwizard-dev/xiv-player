@@ -20,30 +20,7 @@ local TIMER_ROOM = 12 -- the countdown prints under each icon, FFXIV-style
 local containers, signatures, groupKeys = {}, {}, {}
 local styled = { buffs = {}, debuffs = {} }
 
-local formatter
-local function DurationFormatter()
-    if formatter ~= nil then return formatter or nil end
-    formatter = false
-    local R = Enum.NumericRuleFormatRounding
-    if C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and R then
-        local f = C_StringUtil.CreateNumericRuleFormatter()
-        if pcall(f.SetBreakpoints, f, {
-            { threshold = 0, format = "%d", step = 1, rounding = R.Up },
-            { threshold = 60, format = "%dm", step = 1, rounding = R.Up, components = { { div = 60 } } },
-            { threshold = 61, format = "%dm", step = 1, rounding = R.Down, components = { { div = 60 } } },
-            { threshold = 3600, format = "%dh", step = 1, rounding = R.Down, components = { { div = 3600 } } },
-        }) then
-            formatter = f
-        end
-    end
-    return formatter or nil
-end
-
--- Blizzard renamed the container layout setters mid-12.1 (SetAuraLayout* -> SetFlowLayout*).
-local function CallEither(c, newName, oldName, ...)
-    local f = c[newName] or c[oldName]
-    if f then pcall(f, c, ...) end
-end
+local A = FrogLib.Auras -- the rows' building blocks (FrogLib's Auras.lua)
 
 local function StyleButton(d)
     local cfg = ns.db[d.kind]
@@ -61,41 +38,11 @@ end
 -- handing them over makes the engine write text straight away.
 local function MakeInit(kind)
     return function(button)
-        local d = { kind = kind, button = button }
-        d.border = button:CreateTexture(nil, "BACKGROUND")
-        d.border:SetAllPoints()
-        if kind == "debuffs" then
-            d.border:SetColorTexture(0.75, 0.12, 0.08, 1)
-        else
-            d.border:SetColorTexture(0, 0, 0, 1)
-        end
-        d.icon = button:CreateTexture(nil, "ARTWORK")
-        d.icon:SetPoint("TOPLEFT", 1, -1)
-        d.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-        d.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        d.cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
-        d.cooldown:SetAllPoints(d.icon)
-        d.cooldown:SetDrawEdge(false)
-        d.cooldown:SetReverse(true)
-        d.cooldown:SetHideCountdownNumbers(true)
-        local carrier = CreateFrame("Frame", nil, button)
-        carrier:SetAllPoints()
-        carrier:SetFrameLevel(d.cooldown:GetFrameLevel() + 1)
-        carrier:EnableMouse(false)
-        d.stack = carrier:CreateFontString(nil, "OVERLAY")
-        d.stack:SetPoint("BOTTOMRIGHT", -1, 1)
-        d.duration = carrier:CreateFontString(nil, "OVERLAY")
-        d.duration:SetPoint("TOP", button, "BOTTOM", 0, -1)
-        StyleButton(d)
-
-        -- Clicks off so icons never eat clicks meant for the world; hover tooltips stay.
-        pcall(button.SetMouseClickEnabled, button, false)
-        button:SetIcon(d.icon)
-        button:SetDurationCooldown(d.cooldown)
-        button:SetApplicationCount(d.stack, {})
-        if not pcall(button.SetDurationText, button, d.duration, { textFormatter = DurationFormatter() }) then
-            pcall(button.SetDurationText, button, d.duration, {})
-        end
+        local d = A.InitButton(button, { border = kind == "debuffs" and { 0.75, 0.12, 0.08 } or nil,
+            style = function(new)
+                new.kind = kind
+                StyleButton(new)
+            end })
         table.insert(styled[kind], d)
     end
 end
@@ -114,25 +61,15 @@ end
 
 local function Build(kind)
     local cfg = ns.db[kind]
-    local old = containers[kind]
-    if old then
-        pcall(old.SetUnit, old, "none")
-        old:Hide()
-        containers[kind] = nil
-    end
-    if not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        C_AddOns.LoadAddOn("Blizzard_AuraContainer")
-    end
-    local ok, c = pcall(CreateFrame, "AuraContainer", nil, ns.Player.frame, "CustomAuraContainerTemplate")
-    if not ok then return end
+    A.Release(containers[kind])
+    containers[kind] = nil
+    local c = A.NewContainer(ns.Player.frame)
+    if not c then return end
 
     -- Placed before anything else: a container without a renderable rect never shows an aura.
-    c:SetSize(1, 1)
     containers[kind] = c
     Auras:Anchor()
-    CallEither(c, "SetFlowLayoutAnchorPoint", "SetAuraLayoutAnchorPoint", "BOTTOMLEFT")
-    CallEither(c, "SetFlowLayoutGrowthDirection", "SetAuraLayoutGrowthDirection",
-        AnchorUtil.FlowDirection.Right, AnchorUtil.FlowDirection.Up)
+    A.Flow(c, "BOTTOMLEFT", "RIGHT", "UP")
 
     styled[kind] = {}
     local keys, init, layout = {}, MakeInit(kind), Layout(cfg)
@@ -186,7 +123,7 @@ function Auras:Apply()
             for _, key in ipairs(groupKeys[kind]) do
                 pcall(c.SetAuraGroupLayout, c, key, layout)
             end
-            CallEither(c, "SetFlowLayoutMaximumLineSize", "SetAuraLayoutRowWidth", ns.db.width + 0.4)
+            A.SetLineSize(c, ns.db.width + 0.4)
             c:SetShown(cfg.enabled)
             for _, d in ipairs(styled[kind]) do pcall(StyleButton, d) end
         end
@@ -198,91 +135,12 @@ end
 -- Settings pages: the spell lists
 ------------------------------------------------------------------------------
 
-local ROW_H = 26
-
-local function SpellInfo(id)
-    return C_Spell.GetSpellName(id), C_Spell.GetSpellTexture(id)
-end
-
--- Mouse-wheel scroll list of icon + text rows; callers add their own buttons per row.
-local function ScrollList(parent, w, h)
-    local sf = CreateFrame("ScrollFrame", nil, parent)
-    sf:SetSize(w, h)
-    local bg = sf:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 0.3)
-    local child = CreateFrame("Frame", nil, sf)
-    child:SetSize(w, 1)
-    sf:SetScrollChild(child)
-    sf:EnableMouseWheel(true)
-    sf:SetScript("OnMouseWheel", function(self, delta)
-        local max = math.max(0, child:GetHeight() - self:GetHeight())
-        self:SetVerticalScroll(math.max(0, math.min(max, self:GetVerticalScroll() - delta * ROW_H)))
-    end)
-    sf.child, sf.rows, sf.w = child, {}, w
-    return sf
-end
-
-local function Fill(sf, items, setup)
-    for i, item in ipairs(items) do
-        local r = sf.rows[i]
-        if not r then
-            r = CreateFrame("Frame", nil, sf.child)
-            r:SetSize(sf.w - 8, ROW_H)
-            r:SetPoint("TOPLEFT", 4, -(i - 1) * ROW_H - 2)
-            r.icon = r:CreateTexture(nil, "ARTWORK")
-            r.icon:SetSize(22, 22)
-            r.icon:SetPoint("LEFT")
-            r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            r.text = UI.Label(r, "", "GameFontHighlight")
-            r.text:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
-            r.text:SetWidth(sf.w - 150)
-            r.text:SetJustifyH("LEFT")
-            r.text:SetWordWrap(false)
-            sf.rows[i] = r
-        end
-        setup(r, item, i)
-        r:Show()
-    end
-    for i = #items + 1, #sf.rows do sf.rows[i]:Hide() end
-    sf.child:SetHeight(math.max(1, #items * ROW_H + 4))
-    local max = math.max(0, sf.child:GetHeight() - sf:GetHeight())
-    if sf:GetVerticalScroll() > max then sf:SetVerticalScroll(max) end
-end
-
--- Lists the auras on you right now, so a spell can be added without knowing its ID.
-local picker
+-- The lists, and a picker of the auras on you right now (so a spell can be added without knowing
+-- its ID): FrogLib's UI.lua.
+local SpellInfo, ScrollList, Fill = UI.SpellInfo, UI.ScrollList, UI.FillList
+local function Say(text) print("|cfff5dc8fXIVPlayer|r: " .. text) end
 local function ShowPicker(window, kind, onAdd)
-    if InCombatLockdown() then
-        print("|cfff5dc8fXIVPlayer|r: Leave combat to browse your current auras.")
-        return
-    end
-    if not picker then
-        picker = CreateFrame("Frame", nil, window, "BasicFrameTemplateWithInset")
-        picker:SetSize(320, 420)
-        picker:SetPoint("TOPLEFT", window, "TOPRIGHT", 4, 0)
-        picker.title = UI.Label(picker, "")
-        picker.title:SetPoint("TOP", 0, -5)
-        picker.list = ScrollList(picker, 296, 370)
-        picker.list:SetPoint("TOPLEFT", 12, -32)
-    end
-    picker.title:SetText("Your current " .. kind)
-    local items = {}
-    for i = 1, 40 do
-        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, kind == "buffs" and "HELPFUL" or "HARMFUL")
-        if not ok or not aura then break end
-        if not issecret(aura.spellId) then items[#items + 1] = aura end
-    end
-    Fill(picker.list, items, function(r, aura)
-        r.icon:SetTexture(aura.icon)
-        r.text:SetText(aura.name .. " |cff888888(" .. aura.spellId .. ")|r")
-        if not r.add then
-            r.add = UI.Button(r, "Add", 44, 20)
-            r.add:SetPoint("RIGHT", -2, 0)
-        end
-        r.add:SetScript("OnClick", function() onAdd(aura.spellId) end)
-    end)
-    picker:Show()
+    UI.AuraPicker(window, kind, onAdd, Say)
 end
 
 -- One settings page: buffs are a whitelist (shown in order), debuffs a blacklist.
@@ -356,7 +214,10 @@ function Auras.BuildPage(p, kind)
         eb:SetText("")
     end)
     pick:SetScript("OnClick", function() ShowPicker(ns.window, kind, AddID) end)
-    p:HookScript("OnHide", function() if picker then picker:Hide() end end)
+    p:HookScript("OnHide", function()
+        local picker = ns.window and ns.window.frogPicker
+        if picker then picker:Hide() end
+    end)
 
     local list = ScrollList(p, 400, whitelist and 130 or 104)
     place(list, 0)
