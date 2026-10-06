@@ -1,5 +1,37 @@
 # XIVPlayer
 
+## 0.6.0
+
+### Mana in real time
+- The MP gauge and its number now move in real time, the way Blizzard's own mana bar does, instead of jumping every couple of seconds. The gauge eases smoothly to each new value.
+- New: your **mana regen** after the MP number, live (for example "+7.5/s"), straight from the game's own figure (the character sheet's Mana Regen). It can show per 5 seconds instead ("+37 mp5").
+- New: the **five-second rule**. After you spend mana a thin strip fills under the MP gauge for the five seconds until your regen starts again, and the regen number dims meanwhile.
+- Both are on the Text tab and can be turned off. They follow your mana onto the extra MP gauge in bear and cat form.
+
+### Swing timers
+- New **Swing timer** tab: main hand, off hand (when you dual wield) and ranged timers in the same FFXIV look as the cast bar (same gauge style, texture and font, the hand's name on the left and the time to your next swing on the right).
+- Show them in combat, with an enemy targeted, either, or always. Each hand can be turned on or off, and the size, colours, name and time text are yours to set.
+- Out of range of your target, a timer dims and its time turns red.
+- Can hide Blizzard's own swing timers.
+- Off until you turn it on. Unlock the bar (Layout tab) to see samples and drag the timers where you want them.
+
+### HP and MP further apart
+- The gap between the HP and MP gauges now goes up to the width of your screen, with a slider. With a wide gap the two sit either side of your action bars, which suits gamepad players. A new button centres the bar across the screen so they spread out evenly. Shift-click - or + for bigger steps.
+- Clicking the gauges to target yourself now only works on the gauges themselves, so the space between them (your action bars) gets its own clicks.
+- Existing layouts don't change.
+
+### Fixes
+- The cast bar no longer errors when the game hides the spell's start and end times: the latency shade is simply left off for that cast. While unlocked, a cast of yours shows over the sample.
+- **Hide Blizzard's cast bar** now works with the gamepad interface. The game uses a separate cast bar in gamepad mode, and only the usual one was being hidden.
+- **Hide Blizzard's cast bar** and **Hide Blizzard's player frame** now hold during combat as well. Before, when the game re-laid out the bottom of the screen mid-fight, Blizzard's cast bar could come back until the fight ended. They're now also hidden again after loading screens and Edit Mode layout changes.
+- With Blizzard's cast bar locked under the player frame (Edit Mode), hiding the player frame no longer hides that cast bar along with it.
+- Hiding Blizzard's frames now goes through code shared with the other Frog Wizard add-ons, so two of them hiding the same frame (FrogUI or FrogFrames hiding the player frame, say) agree: it stays hidden until neither wants it hidden. A cast bar you lock under the player frame while it's hidden now stays on screen too.
+- The spell ID line on tooltips no longer causes an error when the game hides an aura's spell.
+- HP and MP number templates with more than six words now keep updating.
+
+### Under the hood
+- The click buttons, power colours, percentages and text templates are FrogLib's, shared with the other Frog Wizard add-ons.
+
 ## 0.5.3
 
 ### Under the hood

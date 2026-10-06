@@ -1,6 +1,7 @@
 local ADDON, ns = ...
 local UI = ns.UI
-local issecret = issecretvalue or function() return false end
+local issecret = FrogLib.issecret
+local Color, Unit, Secure = FrogLib.Color, FrogLib.Unit, FrogLib.Secure
 
 ns.defaults = {
     locked = true,
@@ -8,7 +9,9 @@ ns.defaults = {
     scale = 1,
     width = 220,   -- per gauge
     height = 8,
-    spacing = 28,  -- between gauges
+    -- Between the HP and MP gauges. Up to the width of the screen, so the two can sit either
+    -- side of the action bars (the bar is centred on its position, so they spread out evenly).
+    spacing = 28,
     style = "framed", -- "framed": FFXIV's gold-rimmed parameter bar; "line": thin glowing line
     texture = "Interface\\Buttons\\WHITE8X8",
     colorMode = "xiv", -- "xiv": FFXIV colours; "wow": WoW's power colours
@@ -41,6 +44,15 @@ ns.defaults = {
     -- Latency: the end of the cast already safe to cast through, shaded. Icon: left of the bar.
     cast = { enabled = true, hideBlizzard = true, width = 260, height = 6, x = 0, y = 70, showTime = true,
         showLatency = true, latencyColor = { r = 0.9, g = 0.15, b = 0.1 }, showIcon = false, iconSize = 24 },
+    -- Mana regen on the gauge showing your mana (Regen.lua): the live rate after the number
+    -- (per second, or per 5 seconds: per = 5), and the five-second rule as a strip under it.
+    regen = { rate = true, rule = true, per = 1 },
+    -- Swing timers (Swing.lua), under the player bar (x/y from its bottom edge). Off until
+    -- turned on: casters have no use for them.
+    swing = { enabled = false, hideBlizzard = true, show = "combat", main = true, off = true, ranged = true,
+        width = 220, height = 4, x = 0, y = -10, showLabel = true, showTime = true, dimOutOfRange = true,
+        colors = { main = { r = 0.95, g = 0.80, b = 0.40 }, off = { r = 0.95, g = 0.58, b = 0.30 },
+            ranged = { r = 0.45, g = 0.82, b = 0.62 } } },
 }
 
 -- FFXIV names: HP, MP, and TP for the energy-like resource. Colours match its gauges.
@@ -53,6 +65,11 @@ local POWER = {
 }
 
 local MANA = Enum.PowerType and Enum.PowerType.Mana or 0
+-- Power is polled every frame, as Blizzard's player frame does; values the game keeps secret
+-- can't be compared with the last ones, so those are re-sent at most this often (seconds).
+local SECRET_POLL = 0.05
+-- The old top of the gap setting: a forms' mana gauge stays at most this far right of MP.
+local OLD_MAX_GAP = 120
 -- Classes whose gauge can show something other than the mana they still have underneath.
 local SHIFT_MANA_CLASSES = { DRUID = true, PRIEST = true, SHAMAN = true }
 
@@ -61,8 +78,8 @@ local function PowerColor(token, db)
     local r, g, b = 0.7, 0.7, 0.7
     if info then r, g, b = unpack(info[2]) end
     if db.colorMode == "wow" then
-        local c = PowerBarColor[token]
-        if c then r, g, b = c.r, c.g, c.b end
+        local wr, wg, wb = Color.PowerToken(token)
+        if wr then r, g, b = wr, wg, wb end
     end
     return r, g, b
 end
@@ -110,8 +127,7 @@ end
 local function Tint(b, r, g, bl)
     b.gauge:SetColor(r, g, bl)
     -- Text in a light version of the gauge colour, as FFXIV does.
-    local lr, lg, lb = r + (1 - r) * 0.55, g + (1 - g) * 0.55, bl + (1 - bl) * 0.55
-    b.label:SetTextColor(lr, lg, lb)
+    b.label:SetTextColor(Color.Lighten(r, g, bl, 0.55))
     b.number:SetTextColor(1, 1, 1)
 end
 
@@ -156,20 +172,29 @@ function Player:Init()
     shield:SetShadowOffset(1, -1)
     shield:SetPoint("BOTTOMLEFT", self.health.number, "BOTTOMRIGHT", 6, 1)
     self.health.shield = shield
+    self.last = { power = {}, mana = {} }
+    ns.Regen:Init(f)
     ns.Cast:Init()
+    ns.Swing:Init()
 
     f:RegisterUnitEvent("UNIT_HEALTH", "player")
     f:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
     f:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")
     f:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+    pcall(f.RegisterUnitEvent, f, "UNIT_POWER_FREQUENT", "player")
     f:RegisterUnitEvent("UNIT_MAXPOWER", "player")
     f:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
+    f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
     f:RegisterEvent("PLAYER_REGEN_ENABLED")
     f:RegisterEvent("PLAYER_REGEN_DISABLED")
-    f:SetScript("OnEvent", function(_, event)
+    f:SetScript("OnEvent", function(_, event, ...)
         if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
             self:UpdateHealth()
+        elseif event == "UNIT_POWER_FREQUENT" or event == "UNIT_POWER_UPDATE" then
+            self:PollPower(true)
+        elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+            ns.Regen:OnCast((select(3, ...)))
         elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
             if event == "PLAYER_REGEN_ENABLED" and self.clicksPending then self:SetupClicks() end
             self:UpdateFade(event == "PLAYER_REGEN_DISABLED")
@@ -177,6 +202,15 @@ function Player:Init()
             self:UpdatePower(true)
             self:UpdateHealth(true)
         end
+    end)
+
+    -- Real time: your power is read every frame, as Blizzard's own player frame reads it, rather
+    -- than only when UNIT_POWER_UPDATE comes (which the game sends far less often, so mana
+    -- regen showed in steps). The gauge eases to each new value.
+    local poller = CreateFrame("Frame", nil, f)
+    poller:SetScript("OnUpdate", function(_, elapsed)
+        self:PollPower()
+        ns.Regen:Update(elapsed)
     end)
     self:Apply()
 end
@@ -198,14 +232,20 @@ function Player:Apply()
     self.power.gauge.bar:ClearAllPoints()
     self.power.gauge.bar:SetPoint("LEFT", self.health.gauge.bar, "RIGHT", db.spacing, 0)
     -- Outside the frame's bounds on purpose: growing the frame when you shift would move the
-    -- HP and power gauges too, and the click button can't be resized in combat.
+    -- HP and power gauges too, and the click button can't be resized in combat. With the gauges
+    -- spread far apart it stays near MP rather than drifting off the screen.
     self.mana.gauge.bar:ClearAllPoints()
-    self.mana.gauge.bar:SetPoint("LEFT", self.power.gauge.bar, "RIGHT", db.spacing, 0)
+    self.mana.gauge.bar:SetPoint("LEFT", self.power.gauge.bar, "RIGHT", math.min(db.spacing, OLD_MAX_GAP), 0)
 
     self:SetupClicks()
-    ns.HideBlizzardFrame("PlayerFrame", db.hidePlayerFrame, { "PetFrame", "TotemFrame" })
+    -- The cast bar is kept out too when it's locked under the player frame (Edit Mode), so
+    -- hiding the frame alone doesn't take Blizzard's cast bar with it.
+    FrogLib.Hider.Set(ADDON, "PlayerFrame", db.hidePlayerFrame,
+        { keep = { "PetFrame", "TotemFrame", "PlayerCastingBarFrame" } })
     ns.Auras:Apply()
     ns.Cast:Apply()
+    ns.Swing:Apply()
+    self.manaBlock = false -- re-attach the regen display, in the new style
     self:UpdateHealth(true)
     self:UpdatePower(true)
     self:UpdateFade()
@@ -217,26 +257,28 @@ function Player:Apply()
 end
 
 -- Clicks: a secure button over the bar targets you on left-click and opens your unit menu on
--- right-click. It copies the bar's place, scale and size instead of anchoring to it (anything a
--- secure frame is anchored to becomes protected). A unit button's own "togglemenu" is gated on
--- 12.x, so right-click runs "/click" on a hidden SecureActionButton child whose togglemenu isn't.
-local function ClickButton()
-    local b = CreateFrame("Button", "XIVPlayerClick", UIParent, "SecureUnitButtonTemplate")
-    b:SetAttribute("unit", "player")
-    b:SetAttribute("*type1", "target")
-    b:RegisterForClicks("AnyUp")
+-- right-click (FrogLib.Secure's). It copies the bar's place, scale and size instead of anchoring
+-- to it (anything a secure frame is anchored to becomes protected). Two buttons, one over each
+-- gauge, sharing one menu button, so with the gauges spread either side of the action bars the
+-- space between them (the action bars) still takes its own clicks.
 
-    local menu = CreateFrame("Button", "XIVPlayerClickMenu", b, "SecureActionButtonTemplate")
-    menu:SetSize(1, 1)
-    menu:EnableMouse(false)
-    menu:RegisterForClicks("AnyUp")
-    for i = 1, 5 do menu:SetAttribute("type" .. i, "togglemenu") end
-    menu:SetAttribute("useparent-unit", true)
-    menu:SetAttribute("useOnKeyDown", false) -- act on the up-click whatever the key-down setting
-    b:SetAttribute("*type2", "macro")
-    b:SetAttribute("*macrotext2", "/click XIVPlayerClickMenu")
-    b:Hide()
-    return b
+-- How far across and up a frame its anchor point lies (0 = left/bottom, 1 = right/top).
+local function PointFractions(point)
+    local fx = point:find("LEFT") and 0 or point:find("RIGHT") and 1 or 0.5
+    local fy = point:find("BOTTOM") and 0 or point:find("TOP") and 1 or 0.5
+    return fx, fy
+end
+
+-- Places button b over the part of the bar from `left` to `left + w` (its full height), with
+-- the bar's own anchor point and offsets, so it follows the bar through UI scale changes.
+local function PlaceOver(b, db, frameW, frameH, left, w)
+    local p = db.point
+    local fx = PointFractions(p[1])
+    b:SetScale(db.scale)
+    b:ClearAllPoints()
+    b:SetPoint(p[1], UIParent, p[3], p[4] + left + w * fx - frameW * fx, p[5])
+    b:SetSize(w, frameH)
+    b:SetHitRectInsets(-4, -4, -6, -4)
 end
 
 -- Secure frames can only be placed and shown out of combat; changes made in combat wait.
@@ -247,27 +289,25 @@ function Player:SetupClicks()
     end
     self.clicksPending = nil
     local db = ns.db
-    self.click = self.click or ClickButton()
-    local c = self.click
-    c:SetScale(db.scale)
-    c:ClearAllPoints()
-    c:SetPoint(db.point[1], UIParent, db.point[3], db.point[4], db.point[5])
-    c:SetSize(self.frame:GetSize())
-    c:SetHitRectInsets(-4, -4, -6, -4)
+    if not self.click then
+        self.click = Secure.UnitButton("XIVPlayerClick", "player")
+        self.clickPower = Secure.UnitButton("XIVPlayerClickPower", "player", { menu = "XIVPlayerClickMenu" })
+    end
+    local W, H = self.frame:GetSize()
+    -- Each half reaches into the gap by up to 16, so at the usual gap they meet in the middle
+    -- and cover the whole bar, as the single button did before.
+    local reach = math.min(db.spacing / 2, 16)
+    PlaceOver(self.click, db, W, H, 0, db.width + reach)
+    PlaceOver(self.clickPower, db, W, H, db.width + db.spacing - reach, db.width + reach)
     -- Off while unlocked, so the bar can be dragged.
-    c:SetShown(db.clicks and db.locked)
-end
-
-local function Percent(unitPercent, value, max)
-    if unitPercent then return unitPercent end
-    if issecret(value) or issecret(max) or max == 0 then return 0 end
-    return value / max * 100
+    local shown = db.clicks and db.locked
+    self.click:SetShown(shown)
+    self.clickPower:SetShown(shown)
 end
 
 function Player:UpdateHealth(instant)
     local db = ns.db
     local value, max = UnitHealth("player"), UnitHealthMax("player")
-    local pct = UnitHealthPercent and CurveConstants and UnitHealthPercent("player", true, CurveConstants.ScaleTo100)
     self.health.gauge:SetValues(value, max, instant)
     -- The shield total can be secret; it only ever goes into the gauge's status bars.
     local g = self.health.gauge
@@ -289,20 +329,44 @@ function Player:UpdateHealth(instant)
     fs:SetTextColor(ac.r, ac.g, ac.b)
     local c = db.healthColor
     Tint(self.health, c.r, c.g, c.b)
-    UI.SetTemplateText(self.health.number, db.healthText, { value = value, max = max, percent = Percent(pct, value, max) })
+    -- The values may be secret: FrogLib's template only hands them to SetFormattedText.
+    UI.SetTemplateText(self.health.number, db.healthText,
+        { value = value, max = max, percent = Unit.HealthPercent("player") })
+end
+
+-- A block's gauge and number from your power of type pType; instant: no easing (a change of
+-- form or a reload). The values may be secret: they only go to the gauge and the text.
+local function PaintPower(b, pType, value, max, instant)
+    b.gauge:SetValues(value, max, instant)
+    UI.SetTemplateText(b.number, ns.db.powerText,
+        { value = value, max = max, percent = Unit.PowerPercent("player", pType) })
+    if pType == MANA then ns.Regen:OnMana(value, max) end
 end
 
 function Player:UpdatePower(instant)
     local db = ns.db
     local pType, token = UnitPowerType("player")
+    self.pType = pType
     local value, max = UnitPower("player", pType), UnitPowerMax("player", pType)
-    local pct = UnitPowerPercent and CurveConstants and UnitPowerPercent("player", pType, true, CurveConstants.ScaleTo100)
     local info = POWER[token]
     self.power.label:SetText(info and info[1] or (token and token:sub(1, 2)) or "PW")
-    self.power.gauge:SetValues(value, max, instant)
     Tint(self.power, PowerColor(token, db))
-    UI.SetTemplateText(self.power.number, db.powerText, { value = value, max = max, percent = Percent(pct, value, max) })
+    PaintPower(self.power, pType, value, max, instant)
+    self.last.power = {}
     self:UpdateMana(pType, instant)
+    -- The regen display goes on whichever gauge shows your mana.
+    local block, r, g, b = nil, nil, nil, nil
+    if pType == MANA then
+        block = self.power
+        r, g, b = PowerColor(token, db)
+    elseif self.manaShown then
+        block = self.mana
+        r, g, b = PowerColor("MANA", db)
+    end
+    if block ~= self.manaBlock then
+        self.manaBlock = block
+        ns.Regen:Attach(block, r, g, b)
+    end
 end
 
 -- Your mana while the main gauge shows something else (bear or cat form, Shadow, Elemental).
@@ -318,18 +382,40 @@ function Player:UpdateMana(pType, instant)
         ShowBlock(self.mana, shown)
         instant = true -- no sliding up from empty when it appears
     end
+    self.last.mana = {}
     if not shown then return end
-    local pct = UnitPowerPercent and CurveConstants and UnitPowerPercent("player", MANA, true, CurveConstants.ScaleTo100)
-    self.mana.gauge:SetValues(value, max, instant)
     Tint(self.mana, PowerColor("MANA", db))
-    UI.SetTemplateText(self.mana.number, db.powerText, { value = value, max = max, percent = Percent(pct, value, max) })
+    PaintPower(self.mana, MANA, value, max, instant)
+end
+
+-- One block, if its power changed (or, while the game keeps it secret, if `due`).
+function Player:PollBlock(b, pType, last, force, due)
+    local value, max = UnitPower("player", pType), UnitPowerMax("player", pType)
+    if issecret(value) or issecret(max) then
+        if not (force or due) then return end
+        last.value, last.max = nil, nil
+    else
+        if not force and last.value == value and last.max == max then return end
+        last.value, last.max = value, max
+    end
+    PaintPower(b, pType, value, max)
+end
+
+-- Every frame, and on UNIT_POWER_FREQUENT (force).
+function Player:PollPower(force)
+    if self.pType == nil then return end
+    local now = GetTime()
+    local due = now - (self.polledAt or 0) >= SECRET_POLL
+    if due then self.polledAt = now end
+    self:PollBlock(self.power, self.pType, self.last.power, force, due)
+    if self.manaShown then self:PollBlock(self.mana, MANA, self.last.mana, force, due) end
 end
 
 -- inCombat comes from the combat events: while PLAYER_REGEN_DISABLED is being handled,
 -- InCombatLockdown() still says false, so asking it there left the bar dimmed all fight.
 function Player:UpdateFade(inCombat)
     local db = ns.db
-    if inCombat == nil then inCombat = InCombatLockdown() or UnitAffectingCombat("player") end
+    if inCombat == nil then inCombat = InCombatLockdown() or FrogLib.Safe(UnitAffectingCombat("player")) end
     local dim = db.fade and db.locked and not inCombat
     self.frame:SetAlpha(dim and db.fadeAlpha or 1)
 end
@@ -340,6 +426,23 @@ end
 
 local COLOR_MODES = UI.Options("xiv", "FFXIV colours", "wow", "WoW power colours")
 local STYLES = UI.Options("framed", "Framed (gold rim)", "line", "Line (thin glow)")
+local REGEN_UNITS = UI.Options(1, "Per second (+7.5/s)", 5, "Per 5 seconds (+37 mp5)")
+
+-- The widest gap that still fits both gauges on the screen, at the bar's scale.
+local function MaxGap()
+    local db = ns.db
+    local screen = UIParent:GetWidth() / db.scale
+    return math.max(OLD_MAX_GAP, math.floor((screen - db.width * 2 - 8) / 2) * 2)
+end
+
+-- Keeps the bar's height and puts its middle at the middle of the screen.
+function Player:CentreHorizontally()
+    local db, f = ns.db, self.frame
+    local bottom = f:GetBottom()
+    if not bottom then return end
+    db.point = { "BOTTOM", "UIParent", "BOTTOM", 0, math.floor(bottom + 0.5) }
+    ns.Refresh()
+end
 
 local function BuildLayout(p)
     local db = ns.db
@@ -353,7 +456,14 @@ local function BuildLayout(p)
     place(UI.Stepper(p, "Scale", 0.5, 2, 0.05, function() return db.scale end, function(v) db.scale = v end, "%.2f"), 26)
     place(UI.Stepper(p, "Gauge width", 80, 500, 10, function() return db.width end, function(v) db.width = v end), 26)
     place(UI.Stepper(p, "Gauge height", 2, 20, 1, function() return db.height end, function(v) db.height = v end), 26)
-    place(UI.Stepper(p, "Gap between gauges", 0, 120, 2, function() return db.spacing end, function(v) db.spacing = v end), 32)
+    -- Up to the whole screen: the gauges can sit either side of the action bars.
+    place(UI.Slider(p, "Gap between gauges", 0, 120, 2, function() return db.spacing end,
+        function(v) db.spacing = v end, MaxGap), 28)
+    local centre = UI.Button(p, "Centre the bar across the screen", 230)
+    place(centre, 26, 150)
+    centre:SetScript("OnClick", function() Player:CentreHorizontally() end)
+    place(UI.Help(p, "A wide gap puts HP and MP either side of your action bars; centre the bar to "
+        .. "spread them evenly. Shift-click - or + for bigger steps.", 400), 30)
     place(UI.Dropdown(p, "Gauge style", STYLES, function() return db.style end,
         function(v) db.style = v end), 30)
     place(UI.Dropdown(p, "Bar texture", function() return ns.Media:List("statusbar") end,
@@ -390,7 +500,18 @@ local function BuildText(p)
     place(UI.Stepper(p, "Label size (HP/MP)", 8, 24, 1, function() return db.labelSize end,
         function(v) db.labelSize = v end), 26)
     place(UI.Stepper(p, "Number size", 10, 48, 1, function() return db.numberSize end,
-        function(v) db.numberSize = v end), 26)
+        function(v) db.numberSize = v end), 34)
+
+    local regen = db.regen
+    place(UI.Label(p, "Mana regen"), 22)
+    place(UI.Checkbox(p, "Show my mana regen after the MP number (live)",
+        function() return regen.rate end, function(v) regen.rate = v end), 28)
+    place(UI.Dropdown(p, "Regen shown", REGEN_UNITS, function() return regen.per end,
+        function(v) regen.per = v end), 30)
+    place(UI.Checkbox(p, "Show the five-second rule under the MP gauge",
+        function() return regen.rule end, function(v) regen.rule = v end), 28)
+    place(UI.Help(p, "After you spend mana, regen stops for five seconds; a strip under the gauge fills "
+        .. "until it starts again. The rate is the game's own (the character sheet's Mana Regen).", 400), 36)
 end
 
 local function BuildCast(p)
@@ -420,10 +541,11 @@ end
 
 function ns.ToggleConfig()
     if not ns.window then
-        ns.window = UI.Window("XIVPlayerConfig", "XIVPlayer", 540, 600, {
+        ns.window = UI.Window("XIVPlayerConfig", "XIVPlayer", 650, 660, {
             { "layout", "Layout", BuildLayout },
             { "text", "Text", BuildText },
             { "cast", "Cast bar", BuildCast },
+            { "swing", "Swing timer", ns.Swing.BuildPage },
             { "buffs", "Buffs", function(p) ns.Auras.BuildPage(p, "buffs") end },
             { "debuffs", "Debuffs", function(p) ns.Auras.BuildPage(p, "debuffs") end },
         })

@@ -9,7 +9,7 @@ ns.Auras = Auras
 -- where addons can't read aura data. Lessons carried over: position a container before setting
 -- it up, never anchor anything to it, and size its buttons ourselves (the engine makes them 0x0).
 
-local issecret = issecretvalue or function() return false end
+local issecret = FrogLib.issecret
 local KINDS = { "buffs", "debuffs" }
 local SORT = AuraContainerSortMethod and AuraContainerSortMethod.Default
 local SORT_DIR = AuraContainerSortDirection and AuraContainerSortDirection.Normal
@@ -403,11 +403,11 @@ end
 local idFrame = CreateFrame("Frame")
 idFrame:RegisterEvent("PLAYER_LOGIN")
 idFrame:SetScript("OnEvent", function()
-    if C_AddOns.IsAddOnLoaded("PersonalResourceTweaks") then return end
+    if FrogLib.Loaded("PersonalResourceTweaks") then return end
     if not (TooltipDataProcessor and Enum.TooltipDataType) then return end
     local function AddID(tooltip, data)
         local id = data and data.id
-        if not id or issecret(id) then return end
+        if issecret(id) or not id then return end
         tooltip:AddLine("Spell ID: " .. id, 0.5, 0.8, 1)
     end
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.UnitAura, AddID)

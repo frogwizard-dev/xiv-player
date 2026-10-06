@@ -56,6 +56,57 @@ function UI.Stepper(parent, text, min, max, step, get, set, fmt)
     return f
 end
 
+-- A slider for long ranges, with - and + for single steps (shift-click: ten steps). maxFn, if
+-- given, works out the top of the range each time the control is shown (it can depend on the
+-- screen size or another setting).
+function UI.Slider(parent, text, min, max, step, get, set, maxFn)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetSize(380, 24)
+    UI.Label(f, text, "GameFontHighlight"):SetPoint("LEFT", 4, 0)
+    local s = CreateFrame("Slider", nil, f, "UISliderTemplate")
+    s:SetPoint("LEFT", 150, 0)
+    s:SetSize(116, 16)
+    s:SetValueStep(step)
+    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+    local minus = UI.Button(f, "-", 24)
+    minus:SetPoint("LEFT", s, "RIGHT", 6, 0)
+    local val = UI.Label(f, "", "GameFontHighlight")
+    val:SetWidth(44)
+    val:SetPoint("LEFT", minus, "RIGHT", 2, 0)
+    local plus = UI.Button(f, "+", 24)
+    plus:SetPoint("LEFT", val, "RIGHT", 2, 0)
+
+    local updating = false
+    local function top() return math.max(min, maxFn and maxFn() or max) end
+    local function refresh()
+        updating = true
+        local hi = top()
+        s:SetMinMaxValues(min, hi)
+        s:SetValue(math.min(get(), hi))
+        val:SetText(get())
+        updating = false
+    end
+    local function change(v)
+        v = math.max(min, math.min(top(), v))
+        v = math.floor(v / step + 0.5) * step
+        if v == get() then return end
+        set(v)
+        refresh()
+        ns.Refresh()
+    end
+    s:SetScript("OnValueChanged", function(_, v)
+        if not updating then change(v) end
+    end)
+    local function nudge(d)
+        change(get() + d * step * (IsShiftKeyDown() and 10 or 1))
+    end
+    minus:SetScript("OnClick", function() nudge(-1) end)
+    plus:SetScript("OnClick", function() nudge(1) end)
+    f:SetScript("OnShow", refresh)
+    refresh()
+    return f
+end
+
 -- groups() returns { { title = "...", items = { { name = , path = } } } }
 function UI.Dropdown(parent, text, groups, get, set)
     local f = CreateFrame("Frame", nil, parent)
@@ -200,45 +251,12 @@ end
 
 -- Text templates: "value / max" -> ("%d / %d", {value, max}). Words: value, max, percent
 -- (percent.1 for a decimal), plus any extra words the addon passes in `strings` (formatted %s).
--- Values may be secret, so they only ever reach SetFormattedText.
-local compiled = {}
+-- FrogLib.Text's, shared with Frog Wizard's other addons: any number of words, and a missing
+-- value blank. Values may be secret, so they only ever reach SetFormattedText.
 function UI.Compile(template, strings)
-    local key = template .. "\0" .. (strings and table.concat(strings, ",") or "")
-    local c = compiled[key]
-    if c then return c end
-    local isString = {}
-    for _, w in ipairs(strings or {}) do isString[w] = true end
-    local args = {}
-    local pattern = template:gsub("%%", "%%%%")
-    pattern = pattern:gsub("||", "|")
-    pattern = pattern:gsub("|", "||")
-    pattern = pattern:gsub("(%a+)(%.?%d*)", function(word, suffix)
-        local w = word:lower()
-        if isString[w] then
-            args[#args + 1] = w
-            return "%s" .. suffix
-        elseif w == "value" or w == "max" then
-            args[#args + 1] = w
-            return "%d" .. suffix
-        elseif w == "percent" then
-            args[#args + 1] = "percent"
-            local places = tonumber(suffix:match("^%.(%d)"))
-            if places then return "%." .. math.min(places, 3) .. "f%%" end
-            return "%d%%" .. suffix
-        end
-    end)
-    c = { pattern = pattern, args = args }
-    compiled[key] = c
-    return c
+    return FrogLib.Text.Compile(template, strings)
 end
 
 function UI.SetTemplateText(fs, template, vals, strings)
-    if not template or strtrim(template) == "" then
-        fs:Hide()
-        return
-    end
-    fs:Show()
-    local c = UI.Compile(template, strings)
-    local a = c.args
-    pcall(fs.SetFormattedText, fs, c.pattern, vals[a[1]], vals[a[2]], vals[a[3]], vals[a[4]], vals[a[5]], vals[a[6]])
+    FrogLib.Text.Set(fs, template, vals, strings)
 end

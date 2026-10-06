@@ -7,3 +7,8 @@ manual-changelog:
 ignore:
   - Images
   - RELEASE_NOTES.md
+
+externals:
+  Libs/FrogLib:
+    url: https://github.com/frogwizard-dev/frog-lib
+    tag: latest
