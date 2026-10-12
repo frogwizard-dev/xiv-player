@@ -101,18 +101,21 @@ local function Block(parent, label)
     return b
 end
 
-local function StyleBlock(b, db)
+-- sizes: the gauge's width and height and the label and number sizes (the pet frame has its
+-- own; the player bar's are in db). The style, texture and font are always the player bar's.
+local function StyleBlock(b, db, sizes)
+    sizes = sizes or db
     b.gauge:SetStyle(db.style)
-    b.gauge:SetHeight(db.height)
+    b.gauge:SetHeight(sizes.height)
     b.gauge:SetTexture(db.texture)
-    b.gauge.bar:SetWidth(db.width)
-    ns.Media:SetFont(b.label, db.font, db.labelSize, db.outline)
-    ns.Media:SetFont(b.number, db.font, db.numberSize, db.outline)
+    b.gauge.bar:SetWidth(sizes.width)
+    ns.Media:SetFont(b.label, db.font, sizes.labelSize, db.outline)
+    ns.Media:SetFont(b.number, db.font, sizes.numberSize, db.outline)
     -- The label sits low so its baseline lines up with the big number beside it; the gold
     -- rim of the framed style needs a little more clearance.
     local clearance = db.style == "framed" and 7 or 4
     b.label:ClearAllPoints()
-    b.label:SetPoint("TOPLEFT", b.gauge.bar, "BOTTOMLEFT", 2, -clearance - db.numberSize + db.labelSize)
+    b.label:SetPoint("TOPLEFT", b.gauge.bar, "BOTTOMLEFT", 2, -clearance - sizes.numberSize + sizes.labelSize)
 end
 
 local function Tint(b, r, g, bl)
@@ -128,6 +131,10 @@ local function ShowBlock(b, shown)
     b.label:SetShown(shown)
     b.number:SetShown(shown)
 end
+
+-- The same blocks and colours for the pet frame (Pet.lua).
+ns.Block, ns.StyleBlock, ns.Tint, ns.ShowBlock = Block, StyleBlock, Tint, ShowBlock
+ns.POWER, ns.PowerColor = POWER, PowerColor
 
 ------------------------------------------------------------------------------
 -- The bar
@@ -158,6 +165,7 @@ function Player:Init()
     ns.Regen:Init(f)
     ns.Cast:Init()
     ns.Swing:Init()
+    ns.Pet:Init()
 
     f:RegisterUnitEvent("UNIT_HEALTH", "player")
     f:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
@@ -227,6 +235,7 @@ function Player:Apply()
     ns.Auras:Apply()
     ns.Cast:Apply()
     ns.Swing:Apply()
+    ns.Pet:Apply()
     self.manaBlock = false -- re-attach the regen display, in the new style
     self:UpdateHealth(true)
     self:UpdatePower(true)
@@ -523,14 +532,16 @@ end
 
 function ns.ToggleConfig()
     if not ns.window then
-        ns.window = UI.Window("XIVPlayerConfig", "XIVPlayer", 650, 660, {
+        ns.window = UI.Window("XIVPlayerConfig", "XIVPlayer", 800, 690, {
             { "layout", "Layout", BuildLayout },
             { "text", "Text", BuildText },
             { "cast", "Cast bar", BuildCast },
             { "swing", "Swing timer", ns.Swing.BuildPage },
             { "buffs", "Buffs", function(p) ns.Auras.BuildPage(p, "buffs") end },
             { "debuffs", "Debuffs", function(p) ns.Auras.BuildPage(p, "debuffs") end },
-        })
+            { "pet", "Pet", ns.Pet.BuildPage },
+            { "pettarget", "Pet's target", ns.Pet.BuildTargetPage },
+        }, { fitTabs = true })
         return
     end
     ns.window:SetShown(not ns.window:IsShown())

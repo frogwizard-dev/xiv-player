@@ -1,5 +1,20 @@
 # XIVPlayer
 
+## 0.7.0
+
+### A frame for your pet
+- New **Pet** tab: your pet's own frame in the player bar's FFXIV look (the same gauge style, texture and font): its name over an HP gauge and a resource gauge (mana, focus or energy, whatever the pet has, in its colour), each with the small label and big number under it.
+- Text under each gauge on the left, in the middle and at the right end, from templates (value, max, percent, name), and the name's own template. Empty hides a text.
+- A hunter's pet's happiness, shown or hidden, with its size and place to set; an optional round portrait; gauges that ease to new values or jump.
+- Its own place (drag it while unlocked; a sample shows when you have no pet) and scale. Click it to target your pet, right-click for its menu.
+- With no pet: hidden, or an empty frame. Pet dead: dimmed, hidden or left as it is. Out of range: dimmed (each opacity yours to set).
+- Each part can be turned off: name, portrait, HP gauge, resource gauge, happiness. Blizzard's pet frame can be hidden.
+
+### Your pet's target
+- New **Pet's target** tab: an optional frame of its own for what your pet is attacking: its name (coloured by how it feels about you), HP and resource, the same way, with its own place, scale, sizes and text. Off to start with.
+
+- The settings window is wider, its tabs share the width, and it has a search box (from FrogLib).
+
 ## 0.6.1
 
 - Settings: a dropdown shows the current choice afresh whenever its page opens, and shift-clicking + or - moves ten steps at once. The settings controls now come from FrogLib, shared with Frog Wizard's other add-ons.
