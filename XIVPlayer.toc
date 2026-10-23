@@ -2,7 +2,7 @@
 ## Title: XIVPlayer
 ## Category: Frog Wizard
 ## Notes: An FFXIV-style player bar: thin HP and power gauges with the label and a large number underneath.
-## Version: 0.8.0
+## Version: 0.8.1
 ## X-Curse-Project-ID: 1719646
 ## OptionalDeps: EllesmereUI
 ## SavedVariables: XIVPlayerDB

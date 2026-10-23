@@ -1,5 +1,9 @@
 # XIVPlayer
 
+## 0.8.1
+
+- Options > AddOns with the gamepad interface: the Frog Wizard pages no longer upset the game's gamepad navigation (which could bring up errors on opening the settings). From FrogLib 1.5.0.
+
 ## 0.8.0
 
 - **Resting**: "Zzz" just left of the HP gauge while you're resting (an inn or a city, where rested XP builds up), as Blizzard's player frame shows it, in the bar's font, pulsing slowly. Its text, size, nudge, colour and pulse are on the Text tab, and it can be turned off. A sample shows while the bar is unlocked.
