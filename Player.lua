@@ -166,6 +166,7 @@ function Player:Init()
     ns.Cast:Init()
     ns.Swing:Init()
     ns.Pet:Init()
+    ns.Rest:Init(f, self.health.gauge)
 
     f:RegisterUnitEvent("UNIT_HEALTH", "player")
     f:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
@@ -236,6 +237,7 @@ function Player:Apply()
     ns.Cast:Apply()
     ns.Swing:Apply()
     ns.Pet:Apply()
+    ns.Rest:Apply()
     self.manaBlock = false -- re-attach the regen display, in the new style
     self:UpdateHealth(true)
     self:UpdatePower(true)
@@ -503,6 +505,7 @@ local function BuildText(p)
         function() return regen.rule end, function(v) regen.rule = v end), 28)
     place(UI.Help(p, "After you spend mana, regen stops for five seconds; a strip under the gauge fills "
         .. "until it starts again. The rate is the game's own (the character sheet's Mana Regen).", 400), 36)
+    ns.Rest.BuildSettings(p, place)
 end
 
 local function BuildCast(p)

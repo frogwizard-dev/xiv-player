@@ -1,5 +1,9 @@
 # XIVPlayer
 
+## 0.8.0
+
+- **Resting**: "Zzz" just left of the HP gauge while you're resting (an inn or a city, where rested XP builds up), as Blizzard's player frame shows it, in the bar's font, pulsing slowly. Its text, size, nudge, colour and pulse are on the Text tab, and it can be turned off. A sample shows while the bar is unlocked.
+
 ## 0.7.0
 
 ### A frame for your pet
