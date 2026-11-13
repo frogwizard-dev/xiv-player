@@ -1,5 +1,10 @@
 # XIVPlayer
 
+## 0.9.0
+
+- **Incoming heals** on the HP gauge: while a heal is being cast on you, a teal fill past your health shows where it will be once the heal lands, as Blizzard's personal resource display shows it. Your own heals are a touch brighter than other people's. A shield on you starts where the heals end. On by default; it can be turned off, and its colour changed, on the Layout tab.
+- The settings window is a little taller, to fit the new options.
+
 ## 0.8.1
 
 - Options > AddOns with the gamepad interface: the Frog Wizard pages no longer upset the game's gamepad navigation (which could bring up errors on opening the settings). From FrogLib 1.5.0.

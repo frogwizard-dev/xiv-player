@@ -31,6 +31,10 @@ ns.defaults = {
     absorb = true,    -- shields drawn on the HP gauge as a striped fill
     absorbText = true, -- and "+X" after the HP number, in the shield colour
     absorbColor = { r = 1, g = 1, b = 1 },
+    -- Heals on their way to you, on the HP gauge past your health, up to where it'll be once they
+    -- land (FrogLib.Predict, as Blizzard's personal resource display shows them). Teal, like its.
+    heals = true,
+    healColor = { r = 0.0, g = 0.66, b = 0.61 },
     -- While your gauge shows another resource (a druid's bear or cat form, Shadow, Elemental),
     -- a third gauge to its right shows your mana.
     shiftMana = true,
@@ -156,6 +160,7 @@ function Player:Init()
     self.mana = Block(f, "MP")
     ShowBlock(self.mana, false)
     self.health.gauge.bar:SetPoint("TOPLEFT")
+    self.health.gauge:EnableHeal()
     self.health.gauge:EnableAbsorb()
     local shield = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     shield:SetShadowOffset(1, -1)
@@ -171,6 +176,7 @@ function Player:Init()
     f:RegisterUnitEvent("UNIT_HEALTH", "player")
     f:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
     f:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+    pcall(f.RegisterUnitEvent, f, "UNIT_HEAL_PREDICTION", "player")
     f:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
     pcall(f.RegisterUnitEvent, f, "UNIT_POWER_FREQUENT", "player")
     f:RegisterUnitEvent("UNIT_MAXPOWER", "player")
@@ -180,7 +186,8 @@ function Player:Init()
     f:RegisterEvent("PLAYER_REGEN_ENABLED")
     f:RegisterEvent("PLAYER_REGEN_DISABLED")
     f:SetScript("OnEvent", function(_, event, ...)
-        if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
+        if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED"
+            or event == "UNIT_HEAL_PREDICTION" then
             self:UpdateHealth()
         elseif event == "UNIT_POWER_FREQUENT" or event == "UNIT_POWER_UPDATE" then
             self:PollPower(true)
@@ -304,6 +311,12 @@ function Player:UpdateHealth(instant)
     self.health.gauge:SetValues(value, max, instant)
     -- The shield total can be secret; it only ever goes into the gauge's status bars.
     local g = self.health.gauge
+    g:ShowHeal(db.heals)
+    if db.heals then
+        local hc = db.healColor
+        g:SetHealColor(hc.r, hc.g, hc.b)
+        g:UpdateHeal("player", instant)
+    end
     local shield = (UnitGetTotalAbsorbs and UnitGetTotalAbsorbs("player")) or 0
     local ac = db.absorbColor
     g:ShowAbsorb(db.absorb)
@@ -467,6 +480,10 @@ local function BuildLayout(p)
         function() return db.shiftMana end, function(v) db.shiftMana = v end), 30)
     place(UI.ColorSwatch(p, "HP colour", function() return db.healthColor end,
         function(r, g, b) db.healthColor = { r = r, g = g, b = b } end), 30)
+    place(UI.Checkbox(p, "Show incoming heals on the HP gauge",
+        function() return db.heals end, function(v) db.heals = v end), 26)
+    place(UI.ColorSwatch(p, "Incoming heal colour", function() return db.healColor end,
+        function(r, g, b) db.healColor = { r = r, g = g, b = b } end), 30)
     place(UI.Checkbox(p, "Show shields (absorbs) on the HP gauge",
         function() return db.absorb end, function(v) db.absorb = v end), 26)
     place(UI.Checkbox(p, "Show the shield as \"+X\" after the HP number",
@@ -535,7 +552,7 @@ end
 
 function ns.ToggleConfig()
     if not ns.window then
-        ns.window = UI.Window("XIVPlayerConfig", "XIVPlayer", 800, 690, {
+        ns.window = UI.Window("XIVPlayerConfig", "XIVPlayer", 800, 720, {
             { "layout", "Layout", BuildLayout },
             { "text", "Text", BuildText },
             { "cast", "Cast bar", BuildCast },
