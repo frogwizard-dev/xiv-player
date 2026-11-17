@@ -1,7 +1,9 @@
 local ADDON, ns = ...
 
--- The bar textures and fonts the settings offer, and setting a font safely: FrogLib's Media
--- (Libs\FrogLib\Media.lua), with this addon's own fonts listed first.
+-- What every file uses: FrogLib's settings controls (every change calls ns.Refresh), and the bar
+-- textures and fonts the settings offer (FrogLib's Media), this addon's own fonts listed first.
+ns.UI = FrogLib.UI.Kit({ refresh = function() ns.Refresh() end })
+
 local FONTS = "Interface\\AddOns\\" .. ADDON .. "\\Fonts\\"
 ns.Media = FrogLib.Media.New({
     fonts = {

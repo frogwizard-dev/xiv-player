@@ -1,5 +1,9 @@
 # XIVPlayer
 
+## 0.9.1
+
+- Under the hood: the five-second rule's strip under the mana gauge now comes from FrogLib, shared with FrogFrames and Personal Resource Tweaks; clearer names and shorter notes throughout. It looks and works the same.
+
 ## 0.9.0
 
 - **Incoming heals** on the HP gauge: while a heal is being cast on you, a teal fill past your health shows where it will be once the heal lands, as Blizzard's personal resource display shows it. Your own heals are a touch brighter than other people's. A shield on you starts where the heals end. On by default; it can be turned off, and its colour changed, on the Layout tab.
@@ -11,7 +15,7 @@
 
 ## 0.8.0
 
-- **Resting**: "Zzz" just left of the HP gauge while you're resting (an inn or a city, where rested XP builds up), as Blizzard's player frame shows it, in the bar's font, pulsing slowly. Its text, size, nudge, colour and pulse are on the Text tab, and it can be turned off. A sample shows while the bar is unlocked.
+- **Resting**: "Zzz" left of the HP gauge while you're resting (an inn or a city, where rested XP builds up), as Blizzard's player frame shows it, in the bar's font, pulsing slowly. Its text, size, nudge, colour and pulse are on the Text tab, and it can be turned off. A sample shows while the bar is unlocked.
 
 ## 0.7.0
 
@@ -55,7 +59,7 @@
 - Existing layouts don't change.
 
 ### Fixes
-- The cast bar no longer errors when the game hides the spell's start and end times: the latency shade is simply left off for that cast. While unlocked, a cast of yours shows over the sample.
+- The cast bar no longer errors when the game hides the spell's start and end times: the latency shade is left off for that cast. While unlocked, a cast of yours shows over the sample.
 - **Hide Blizzard's cast bar** now works with the gamepad interface. The game uses a separate cast bar in gamepad mode, and only the usual one was being hidden.
 - **Hide Blizzard's cast bar** and **Hide Blizzard's player frame** now hold during combat as well. Before, when the game re-laid out the bottom of the screen mid-fight, Blizzard's cast bar could come back until the fight ended. They're now also hidden again after loading screens and Edit Mode layout changes.
 - With Blizzard's cast bar locked under the player frame (Edit Mode), hiding the player frame no longer hides that cast bar along with it.
