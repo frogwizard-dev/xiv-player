@@ -136,12 +136,24 @@ function Swing:Init()
     end
     frame:SetScript("OnUpdate", OnUpdate)
 
-    -- Swings, combat, target, range, weapons and Blizzard's bars loading, from FrogLib's tracker.
+    -- Swings, combat, target, range, weapons and Blizzard's bars loading, from FrogLib's tracker. An attack speed
+    -- change (every haste proc) only lays the rows out again when which hands have a weapon changed.
+    local handsKey
+    local function HandsKey()
+        local key = ""
+        for _, hand in ipairs(HANDS) do key = key .. (SwingKit.HasWeapon(hand) and "1" or "0") end
+        return key
+    end
     self.tracker = SwingKit.NewTracker({
         accept = function() return ns.db.locked end, -- the samples stand still
         onShown = function() self:UpdateShown() end,
         onRange = UpdateRange,
-        onLayout = function() self:Layout() end,
+        onLayout = function(event)
+            local key = HandsKey()
+            if event == "UNIT_ATTACK_SPEED" and key == handsKey then return end
+            handsKey = key
+            self:Layout()
+        end,
         onBlizzard = FadeBlizzard,
     })
     frame:Hide()

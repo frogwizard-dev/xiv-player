@@ -1,5 +1,13 @@
 # XIVPlayer
 
+## 0.9.2
+
+- An interrupted channel shows red "Interrupted" rather than ending as if finished.
+- The swing bars no longer show an empty off-hand or ranged bar mid-fight when a haste proc makes your attack speed secret, and no longer lay themselves out again on every haste change.
+- The cast time is written twenty times a second rather than every frame.
+- The pet's portrait no longer goes blank after a loading screen. The pet frame listens only to your pet's and your own unit events, not every unit in a raid.
+- Shared code (FrogLib 1.12.0): see its notes for the rest of what's fixed.
+
 ## 0.9.1
 
 - Under the hood: the five-second rule's strip under the mana gauge now comes from FrogLib, shared with FrogFrames and Personal Resource Tweaks; clearer names and shorter notes throughout. It looks and works the same.

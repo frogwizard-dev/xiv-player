@@ -76,14 +76,22 @@ function Cast:Init()
         refresh = function() self:Update() end, -- a hold is over
     })
 
-    -- Remaining time: the timer object can be secret, so it goes straight into the text.
-    gauge.bar:SetScript("OnUpdate", function(bar)
+    -- Remaining time: the timer object can be secret, so it goes straight into the text. Its tenths change ten times
+    -- a second, so it's written twenty times a second (FrogLib's Cast.EVERY), and an empty one only once.
+    local wait, blank = 0, false
+    gauge.bar:SetScript("OnUpdate", function(bar, elapsed)
         local driver = self.driver
         if driver.sample then return end
         if not ns.db.cast.showTime or not driver.casting then
-            self.time:SetText("")
+            if not blank then
+                blank = true
+                self.time:SetText("")
+            end
             return
         end
+        wait = wait - elapsed
+        if not blank and wait > 0 then return end
+        blank, wait = false, CastKit.EVERY or 0.05
         CastKit.ShowTime(bar, self.time)
     end)
 
@@ -91,12 +99,12 @@ function Cast:Init()
         pcall(frame.RegisterUnitEvent, frame, event, "player")
     end
     pcall(frame.RegisterUnitEvent, frame, "UNIT_SPELLCAST_SENT", "player")
-    frame:SetScript("OnEvent", function(_, event)
+    frame:SetScript("OnEvent", function(_, event, _, _, _, interruptedBy)
         if event == "UNIT_SPELLCAST_SENT" then
             self.sentAt = GetTime()
         else
             if STARTS[event] then self:MeasureLatency() end
-            self:Update(event)
+            self:Update(event, interruptedBy)
         end
     end)
     frame:Hide()
@@ -215,11 +223,11 @@ function Cast:ShowSample()
     self.frame:Show()
 end
 
-function Cast:Update(event)
+function Cast:Update(event, interruptedBy)
     if not ns.db.cast.enabled then
         self.frame:Hide()
         return
     end
     -- Unlocked: the sample, or a real cast of yours over it.
-    self.driver:Update("player", event, not ns.db.locked)
+    self.driver:Update("player", event, not ns.db.locked, interruptedBy)
 end

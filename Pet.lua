@@ -97,9 +97,14 @@ function Pet:Init()
     target.power = Block(target, "MP")
 
     local events = CreateFrame("Frame")
-    for _, event in ipairs({ "UNIT_PET", "PLAYER_ENTERING_WORLD", "UNIT_PORTRAIT_UPDATE", "UNIT_MODEL_CHANGED",
-        "UNIT_HAPPINESS", "PET_UI_UPDATE", "UNIT_NAME_UPDATE", "UNIT_DISPLAYPOWER", "PLAYER_REGEN_ENABLED" }) do
+    -- (PORTRAITS_UPDATED: a portrait painted during a loading screen gets no picture till this.) Unit events only for
+    -- the pet and you, not every unit in a raid.
+    for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PET_UI_UPDATE", "PLAYER_REGEN_ENABLED", "PORTRAITS_UPDATED" }) do
         pcall(events.RegisterEvent, events, event)
+    end
+    for _, event in ipairs({ "UNIT_PET", "UNIT_PORTRAIT_UPDATE", "UNIT_MODEL_CHANGED", "UNIT_HAPPINESS",
+        "UNIT_NAME_UPDATE", "UNIT_DISPLAYPOWER" }) do
+        pcall(events.RegisterUnitEvent, events, event, "pet", "player")
     end
     events:SetScript("OnEvent", function(_, event, unit)
         if event == "PLAYER_REGEN_ENABLED" then
