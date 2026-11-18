@@ -1,5 +1,9 @@
 # XIVPlayer
 
+## 0.9.3
+
+- Its chat lines (the aura list commands) wait for the end of combat when they come during it; the aura picker's "leave combat" shows on screen at once. Shared code (FrogLib 1.13.0): chat lines that come during combat wait for it to end (a line printed in combat taints the chat history, as EllesmereUI found).
+
 ## 0.9.2
 
 - An interrupted channel shows red "Interrupted" rather than ending as if finished.

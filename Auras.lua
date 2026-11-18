@@ -133,7 +133,7 @@ end
 ------------------------------------------------------------------------------
 
 local SpellInfo, ScrollList, Fill = UI.SpellInfo, UI.ScrollList, UI.FillList
-local function Say(text) print("|cfff5dc8fXIVPlayer|r: " .. text) end
+local function Say(text) FrogLib.Util.Say("|cfff5dc8fXIVPlayer|r: " .. text) end -- in combat, after it
 local function ShowPicker(window, kind, onAdd)
     UI.AuraPicker(window, kind, onAdd, Say)
 end
@@ -169,7 +169,7 @@ function Auras.BuildPage(page, kind)
         spellID = tonumber(spellID)
         if not spellID then return end
         if not SpellInfo(spellID) then
-            print("|cfff5dc8fXIVPlayer|r: No spell with ID", spellID)
+            Say("No spell with ID " .. tostring(spellID))
             return
         end
         for _, listed in ipairs(spellIDs) do
