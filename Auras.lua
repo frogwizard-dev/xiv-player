@@ -146,7 +146,7 @@ local function ShowPicker(window, kind, onAdd)
     UI.AuraPicker(window, kind, onAdd, Say)
 end
 
-local BUFF_MODES = UI.Options("whitelist", "Only the ones listed", "blacklist", "All except the ones listed")
+local BUFF_MODES = UI.Options("whitelist", "Whitelist: only these", "blacklist", "Blacklist: all except these")
 
 -- One settings page: buffs are a whitelist (shown in order) or a blacklist, debuffs a blacklist.
 function Auras.BuildPage(page, kind)
@@ -187,10 +187,10 @@ function Auras.BuildPage(page, kind)
         most:SetShown(not ordered)
         cap:SetShown(not ordered)
         if ordered then
-            header:SetText("Buffs to show (in this order)")
+            header:SetText("Whitelist: only these buffs show (in this order)")
             help:SetText("Hover any buff or spell to see its Spell ID, or pick from what's on you now.")
         elseif buffs then
-            header:SetText("Buffs to hide")
+            header:SetText("Blacklist: every buff shows except these")
             help:SetText("Hover any buff or spell to see its Spell ID, or pick from what's on you now. "
                 .. "\"Hide if over\" drops long ones (an hour's food) but also any that never run out "
                 .. "(forms, auras); 0 turns it off.")

@@ -1,5 +1,9 @@
 # XIVPlayer
 
+## 0.10.1
+
+- Clearer names for the Buffs tab's two choices: "Whitelist: only these" and "Blacklist: all except these", and the list's heading says what it does in each ("only these buffs show" or "every buff shows except these").
+
 ## 0.10.0
 
 - **Show every buff**: the Buffs tab has a new "Buffs shown" choice, "All except the ones listed", which shows all your buffs and hides only the ones you add to its list (a blacklist), rather than listing every buff you want to see. Up to 32 show by default ("Most shown"). "Hide if over (mins)" works for it as it does for debuffs, dropping long buffs like an hour's food without listing them, though it also drops buffs that never run out, such as forms and auras. Your whitelist is kept for switching back; it stays the default, so nothing changes until you pick the new choice.
