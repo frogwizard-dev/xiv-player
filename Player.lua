@@ -38,10 +38,12 @@ ns.defaults = {
     -- While your gauge shows another resource (a druid's bear or cat form, Shadow, Elemental),
     -- a third gauge to its right shows your mana.
     shiftMana = true,
-    -- Above the gauges: buffs over HP (a whitelist, empty until you add some), debuffs over MP
-    -- (all of them except a blacklist).
-    buffs = { enabled = true, list = {}, size = 24, spacing = 2, offsetY = 4, showTimer = true },
-    -- maxMinutes: hide debuffs lasting longer than this (0 = off); see Auras.lua for why.
+    -- Above the gauges: buffs over HP, debuffs over MP (all of them except a blacklist). Buffs
+    -- go by mode: "whitelist" shows only `list` (in order, empty until you add some),
+    -- "blacklist" every one except `blacklist`.
+    buffs = { enabled = true, mode = "whitelist", list = {}, blacklist = {}, max = 32, maxMinutes = 0,
+        size = 24, spacing = 2, offsetY = 4, showTimer = true },
+    -- maxMinutes: hide auras lasting longer than this (0 = off); see Auras.lua for why.
     debuffs = { enabled = true, blacklist = {}, max = 16, size = 24, spacing = 2, offsetY = 4, showTimer = true,
         maxMinutes = 0 },
     -- Your cast bar, centred above the player bar (x/y from the bar's top edge).

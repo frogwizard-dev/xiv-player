@@ -3,8 +3,8 @@ local UI = ns.UI
 local Auras = {}
 ns.Auras = Auras
 
--- Your buffs and debuffs above the gauges: whitelisted buffs over HP, every debuff except a
--- blacklist over MP. Drawn by 12.1's AuraContainer (FrogLib.Auras), as Personal Resource Tweaks and
+-- Your buffs and debuffs above the gauges: buffs over HP (a whitelist, or every buff except a
+-- blacklist), every debuff except a blacklist over MP. Drawn by 12.1's AuraContainer (FrogLib.Auras), as Personal Resource Tweaks and
 -- XIVTarget do: the engine picks and draws the auras from a spell-ID filter, so it keeps working
 -- where addons can't read aura data.
 
@@ -51,9 +51,15 @@ local function Layout(settings)
 end
 
 -- Whatever changes which groups exist; groups can't be removed, so a change means a rebuild.
+-- Buffs in whitelist mode: one group per listed spell, in order. Everything else: one group of all
+-- but a blacklist.
+local function Ordered(kind)
+    return kind == "buffs" and ns.db.buffs.mode ~= "blacklist"
+end
+
 local function Signature(kind)
     local settings = ns.db[kind]
-    if kind == "buffs" then return "w|" .. table.concat(settings.list, ",") end
+    if Ordered(kind) then return "w|" .. table.concat(settings.list, ",") end
     return "b|" .. settings.max .. "|" .. (settings.maxMinutes or 0) .. "|" .. table.concat(settings.blacklist, ",")
 end
 
@@ -76,21 +82,23 @@ local function Build(kind)
         opts.initializeFrame, opts.layout = init, layout
         if pcall(container.AddAuraGroup, container, key, filter, opts) then keys[#keys + 1] = key end
     end
-    if kind == "buffs" then
+    if Ordered(kind) then
         -- One single-slot group per spell keeps the whitelist's order.
         for i, spellID in ipairs(settings.list) do
             Add("w" .. i, "HELPFUL", { maxFrameCount = 1, candidateFilters = { includeSpellIDs = { [spellID] = true } } })
         end
     else
         -- On a unit you can assist (you too) the engine ignores spell-ID filters for debuffs, but for
-        -- the few it never hides from addons (EllesmereUI's "identity gate"). Duration works, so long
-        -- debuffs (Boosted Rest's hour) go by a cap instead; it also drops those with no duration.
+        -- the few it never hides from addons (EllesmereUI's "identity gate"); buffs take them. Duration
+        -- works on both, so long auras (Boosted Rest's hour) can go by a cap instead; it also drops
+        -- those with no duration.
         local filters = {}
         local exclude = {}
         for _, spellID in ipairs(settings.blacklist) do exclude[spellID] = true end
         if next(exclude) then filters.excludeSpellIDs = exclude end
         if (settings.maxMinutes or 0) > 0 then filters.maxDuration = settings.maxMinutes * 60 end
-        Add("all", "HARMFUL", { maxFrameCount = settings.max, candidateFilters = next(filters) and filters or nil })
+        Add("all", kind == "buffs" and "HELPFUL" or "HARMFUL",
+            { maxFrameCount = settings.max, candidateFilters = next(filters) and filters or nil })
     end
     groupKeys[kind] = keys
     -- Unit last: the engine only listens for aura events once the container has groups.
@@ -138,32 +146,62 @@ local function ShowPicker(window, kind, onAdd)
     UI.AuraPicker(window, kind, onAdd, Say)
 end
 
--- One settings page: buffs are a whitelist (shown in order), debuffs a blacklist.
+local BUFF_MODES = UI.Options("whitelist", "Only the ones listed", "blacklist", "All except the ones listed")
+
+-- One settings page: buffs are a whitelist (shown in order) or a blacklist, debuffs a blacklist.
 function Auras.BuildPage(page, kind)
     local settings = ns.db[kind]
-    local whitelist = kind == "buffs"
-    local spellIDs = whitelist and settings.list or settings.blacklist
+    local buffs = kind == "buffs"
     local place = UI.Placer()
-    local RefreshList
+    local RefreshList, Relabel
 
-    place(UI.Checkbox(page, "Show " .. kind .. (whitelist and " (only the ones listed below)" or ""), settings, "enabled"), 26)
-    place(UI.Checkbox(page, "Show countdown under the icons", settings, "showTimer"), 30)
-    place(UI.Stepper(page, "Icon size", 14, 48, 2, settings, "size"), 26)
-    if not whitelist then
-        place(UI.Stepper(page, "Most shown", 1, 40, 1, settings, "max"), 26)
-        place(UI.Stepper(page, "Hide if over (mins)", 0, 120, 5, settings, "maxMinutes"), 26)
+    local function SpellIDs()
+        return Ordered(kind) and settings.list or settings.blacklist
     end
+
+    place(UI.Checkbox(page, "Show " .. kind, settings, "enabled"), 26)
+    place(UI.Checkbox(page, "Show countdown under the icons", settings, "showTimer"), 30)
+    if buffs then
+        place(UI.Dropdown(page, "Buffs shown", BUFF_MODES, function() return settings.mode end, function(value)
+            settings.mode = value
+            Relabel()
+            RefreshList()
+        end), 30)
+    end
+    place(UI.Stepper(page, "Icon size", 14, 48, 2, settings, "size"), 26)
+    -- Only for a blacklist; hidden on the buff page while it's a whitelist (they'd do nothing).
+    local most = UI.Stepper(page, "Most shown", 1, 40, 1, settings, "max")
+    place(most, 26)
+    local cap = UI.Stepper(page, "Hide if over (mins)", 0, 120, 5, settings, "maxMinutes")
+    place(cap, 26)
     place(UI.Stepper(page, "Spacing", 0, 12, 1, settings, "spacing"), 26)
     place(UI.Stepper(page, "Raise above the gauge", -20, 80, 2, settings, "offsetY"), 30)
 
-    place(UI.Label(page, whitelist and "Buffs to show (in this order)" or "Debuffs to hide"), 18)
-    if whitelist then
-        place(UI.Help(page, "Hover any buff or spell to see its Spell ID, or pick from what's on you now.", 400), 20)
-    else
-        -- The game skips spell-ID lists for debuffs on you (see Build), so say so plainly.
-        place(UI.Help(page, "The game only lets addons hide a few debuffs on you by name. For long ones "
-            .. "like Boosted Rest (an hour), set \"Hide if over\" above, e.g. to 30. 0 turns it off.", 400), 30)
+    local header = UI.Label(page, "")
+    place(header, 18)
+    local help = UI.Help(page, "", 400)
+    place(help, 30)
+
+    function Relabel()
+        local ordered = Ordered(kind)
+        most:SetShown(not ordered)
+        cap:SetShown(not ordered)
+        if ordered then
+            header:SetText("Buffs to show (in this order)")
+            help:SetText("Hover any buff or spell to see its Spell ID, or pick from what's on you now.")
+        elseif buffs then
+            header:SetText("Buffs to hide")
+            help:SetText("Hover any buff or spell to see its Spell ID, or pick from what's on you now. "
+                .. "\"Hide if over\" drops long ones (an hour's food) but also any that never run out "
+                .. "(forms, auras); 0 turns it off.")
+        else
+            -- The game skips spell-ID lists for debuffs on you (see Build), so say so plainly.
+            header:SetText("Debuffs to hide")
+            help:SetText("The game only lets addons hide a few debuffs on you by name. For long ones "
+                .. "like Boosted Rest (an hour), set \"Hide if over\" above, e.g. to 30. 0 turns it off.")
+        end
     end
+    Relabel()
 
     local function AddID(spellID)
         spellID = tonumber(spellID)
@@ -172,6 +210,7 @@ function Auras.BuildPage(page, kind)
             Say("No spell with ID " .. tostring(spellID))
             return
         end
+        local spellIDs = SpellIDs()
         for _, listed in ipairs(spellIDs) do
             if listed == spellID then return end
         end
@@ -210,10 +249,11 @@ function Auras.BuildPage(page, kind)
         if picker then picker:Hide() end
     end)
 
-    local list = ScrollList(page, 400, whitelist and 130 or 104)
+    local list = ScrollList(page, 400, buffs and 130 or 104)
     place(list, 0)
 
     function RefreshList()
+        local spellIDs, ordered = SpellIDs(), Ordered(kind)
         Fill(list, spellIDs, function(row, spellID, i)
             local name, icon = SpellInfo(spellID)
             row.icon:SetTexture(icon or 134400)
@@ -226,8 +266,8 @@ function Auras.BuildPage(page, kind)
                 row.up = UI.Button(row, "Up", 36, 20)
                 row.up:SetPoint("RIGHT", row.down, "LEFT", -2, 0)
             end
-            row.up:SetShown(whitelist)
-            row.down:SetShown(whitelist)
+            row.up:SetShown(ordered)
+            row.down:SetShown(ordered)
             row.up:SetEnabled(i > 1)
             row.down:SetEnabled(i < #spellIDs)
             row.remove:SetScript("OnClick", function()
